@@ -95,10 +95,7 @@ def calculate_balance_summary(bank_df: pd.DataFrame) -> dict[str, float]:
         }
 
     df = bank_df.copy()
-
-    if "Date" in df.columns:
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        df = df.sort_values("Date").reset_index(drop=True)
+    df = df.reset_index(drop=True)
 
     balances = pd.to_numeric(df["Balance"], errors="coerce").dropna()
 
@@ -226,8 +223,8 @@ uploaded_coa_file = st.sidebar.file_uploader(
     type=["csv"],
 )
 
-run_button = st.sidebar.button("🚀 Run GL Mapping", use_container_width=True)
-clear_button = st.sidebar.button("🧹 Clear Results", use_container_width=True)
+run_button = st.sidebar.button("🚀 Run GL Mapping", width="stretch")
+clear_button = st.sidebar.button("🧹 Clear Results", width="stretch")
 
 if clear_button:
     st.session_state.pop(RESULTS_KEY, None)
@@ -291,31 +288,28 @@ validation_report = results.get("validation_report", {})
 
 st.subheader("Bank Balance Summary")
 
-st.subheader("Bank Balance Summary")
+balance_summary = calculate_balance_summary(bank_df)
 
-if bank_df.empty or "Balance" not in bank_df.columns:
-    st.warning("Balance column not found in uploaded bank statement.")
-else:
-    bank_df["Date"] = pd.to_datetime(bank_df["Date"], errors="coerce")
-    bank_df["Balance"] = pd.to_numeric(bank_df["Balance"], errors="coerce")
+bal_col1, bal_col2, bal_col3 = st.columns(3)
 
-    sorted_bank_df = bank_df.sort_values("Date").reset_index(drop=True)
+with bal_col1:
+    st.metric(
+        "Opening Balance",
+        format_money(balance_summary["opening_balance"]),
+    )
 
-    opening_balance = sorted_bank_df["Balance"].dropna().iloc[0]
-    closing_balance = sorted_bank_df["Balance"].dropna().iloc[-1]
-    balance_movement = closing_balance - opening_balance
+with bal_col2:
+    st.metric(
+        "Closing Balance",
+        format_money(balance_summary["closing_balance"]),
+    )
 
-    bal_col1, bal_col2, bal_col3 = st.columns(3)
+with bal_col3:
+    st.metric(
+        "Balance Movement",
+        format_money(balance_summary["movement"]),
+    )
 
-    with bal_col1:
-        st.metric("Opening Balance", format_money(opening_balance))
-
-    with bal_col2:
-        st.metric("Closing Balance", format_money(closing_balance))
-
-    with bal_col3:
-        st.metric("Balance Movement", format_money(balance_movement))
-        
 
 st.subheader("Pipeline Summary")
 
@@ -374,7 +368,7 @@ with tab_pnl:
     else:
         st.dataframe(
             make_display_safe(pnl_df).style.format({"$": "{:,.2f}"}),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -397,7 +391,7 @@ with tab_tb:
     else:
         st.dataframe(
             make_display_safe(trial_balance_df).style.format({"Amount": "{:,.2f}"}),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -417,7 +411,7 @@ with tab_audit:
     else:
         st.dataframe(
             make_display_safe(mapping_audit_df),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -438,7 +432,7 @@ with tab_unmatched:
     else:
         st.dataframe(
             make_display_safe(unmatched_df),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -452,7 +446,7 @@ with tab_low:
     else:
         st.dataframe(
             make_display_safe(low_confidence_df),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -470,7 +464,7 @@ with tab_rules:
                     "Average_Confidence": "{:,.2f}",
                 }
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -488,6 +482,6 @@ with tab_accounts:
                     "Average_Confidence": "{:,.2f}",
                 }
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
