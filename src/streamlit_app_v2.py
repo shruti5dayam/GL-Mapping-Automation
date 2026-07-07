@@ -112,7 +112,7 @@ def calculate_balance_summary(bank_df: pd.DataFrame) -> dict[str, float]:
     return {
         "opening_balance": opening_balance,
         "closing_balance": closing_balance,
-        "movement": opening_balance - closing_balance,
+        "movement": closing_balance - opening_balance,
     }
 
 
@@ -276,13 +276,9 @@ if not results:
 
 
 bank_df = get_result_df(results, "bank_df")
-mapping_audit_df = get_result_df(results, "mapping_audit_df")
 trial_balance_df = get_result_df(results, "trial_balance_df")
 pnl_df = get_result_df(results, "pnl_df")
 unmatched_df = get_result_df(results, "unmatched_df")
-low_confidence_df = get_result_df(results, "low_confidence_df")
-rule_usage_df = get_result_df(results, "rule_usage_df")
-account_usage_df = get_result_df(results, "account_usage_df")
 validation_report = results.get("validation_report", {})
 
 
@@ -313,12 +309,12 @@ with bal_col3:
 
 st.subheader("Pipeline Summary")
 
-total_transactions = validation_report.get("total_transactions", len(mapping_audit_df))
-unmatched_count = validation_report.get("unmatched_rules", len(unmatched_df))
-low_confidence_count = validation_report.get(
-    "low_confidence_mappings",
-    len(low_confidence_df),
+total_transactions = validation_report.get(
+    "total_transactions",
+    0,
 )
+unmatched_count = validation_report.get("unmatched_rules", len(unmatched_df))
+
 
 mapped_count = total_transactions - unmatched_count
 
@@ -344,15 +340,11 @@ with sum_col4:
 
 
 
-tab_pnl, tab_tb, tab_audit, tab_unmatched, tab_low, tab_rules, tab_accounts = st.tabs(
+tab_pnl, tab_tb, tab_unmatched = st.tabs(
     [
         "P&L",
         "Trial Balance",
-        "Mapping Audit",
         "Unmatched",
-        "Low Confidence",
-        "Rule Usage",
-        "Account Usage",
     ]
 )
 
@@ -399,27 +391,6 @@ with tab_tb:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-
-with tab_audit:
-    st.subheader("Mapping Audit")
-
-    if mapping_audit_df.empty:
-        st.warning("No mapping audit data available.")
-    else:
-        st.dataframe(
-            make_display_safe(mapping_audit_df),
-            width="stretch",
-            hide_index=True,
-        )
-
-        st.download_button(
-            "Download Mapping Audit CSV",
-            data=dataframe_to_csv_bytes(mapping_audit_df),
-            file_name="mapping_audit.csv",
-            mime="text/csv",
-        )
-
-
 with tab_unmatched:
     st.subheader("Unmatched Transactions")
     st.metric("Unmatched Count", len(unmatched_df))
@@ -429,56 +400,6 @@ with tab_unmatched:
     else:
         st.dataframe(
             make_display_safe(unmatched_df),
-            width="stretch",
-            hide_index=True,
-        )
-
-
-with tab_low:
-    st.subheader("Low Confidence Transactions")
-    st.metric("Low Confidence Count", len(low_confidence_df))
-
-    if low_confidence_df.empty:
-        st.success("No low-confidence transactions.")
-    else:
-        st.dataframe(
-            make_display_safe(low_confidence_df),
-            width="stretch",
-            hide_index=True,
-        )
-
-
-with tab_rules:
-    st.subheader("Rule Usage")
-
-    if rule_usage_df.empty:
-        st.warning("No rule usage data available.")
-    else:
-        st.dataframe(
-            make_display_safe(rule_usage_df).style.format(
-                {
-                    "Total_Amount": "{:,.2f}",
-                    "Average_Confidence": "{:,.2f}",
-                }
-            ),
-            width="stretch",
-            hide_index=True,
-        )
-
-
-with tab_accounts:
-    st.subheader("Account Usage")
-
-    if account_usage_df.empty:
-        st.warning("No account usage data available.")
-    else:
-        st.dataframe(
-            make_display_safe(account_usage_df).style.format(
-                {
-                    "Total_Amount": "{:,.2f}",
-                    "Average_Confidence": "{:,.2f}",
-                }
-            ),
             width="stretch",
             hide_index=True,
         )
