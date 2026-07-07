@@ -291,19 +291,31 @@ validation_report = results.get("validation_report", {})
 
 st.subheader("Bank Balance Summary")
 
-balance_summary = calculate_balance_summary(bank_df)
+st.subheader("Bank Balance Summary")
 
-bal_col1, bal_col2, bal_col3 = st.columns(3)
+if bank_df.empty or "Balance" not in bank_df.columns:
+    st.warning("Balance column not found in uploaded bank statement.")
+else:
+    bank_df["Date"] = pd.to_datetime(bank_df["Date"], errors="coerce")
+    bank_df["Balance"] = pd.to_numeric(bank_df["Balance"], errors="coerce")
 
-with bal_col1:
-    st.metric("Opening Balance", format_money(balance_summary["opening_balance"]))
+    sorted_bank_df = bank_df.sort_values("Date").reset_index(drop=True)
 
-with bal_col2:
-    st.metric("Closing Balance", format_money(balance_summary["closing_balance"]))
+    opening_balance = sorted_bank_df["Balance"].dropna().iloc[0]
+    closing_balance = sorted_bank_df["Balance"].dropna().iloc[-1]
+    balance_movement = closing_balance - opening_balance
 
-with bal_col3:
-    st.metric("Balance Movement", format_money(balance_summary["movement"]))
+    bal_col1, bal_col2, bal_col3 = st.columns(3)
 
+    with bal_col1:
+        st.metric("Opening Balance", format_money(opening_balance))
+
+    with bal_col2:
+        st.metric("Closing Balance", format_money(closing_balance))
+
+    with bal_col3:
+        st.metric("Balance Movement", format_money(balance_movement))
+        
 
 st.subheader("Pipeline Summary")
 
