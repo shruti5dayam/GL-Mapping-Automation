@@ -112,7 +112,7 @@ def calculate_balance_summary(bank_df: pd.DataFrame) -> dict[str, float]:
     return {
         "opening_balance": opening_balance,
         "closing_balance": closing_balance,
-        "movement": closing_balance - opening_balance,
+        "movement": opening_balance - closing_balance,
     }
 
 
