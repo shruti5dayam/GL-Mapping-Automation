@@ -319,7 +319,6 @@ low_confidence_count = validation_report.get(
     "low_confidence_mappings",
     len(low_confidence_df),
 )
-total_signed_amount = validation_report.get("total_signed_amount", 0.0)
 
 mapped_count = total_transactions - unmatched_count
 
@@ -329,7 +328,7 @@ mapping_percentage = (
     else 0.0
 )
 
-sum_col1, sum_col2, sum_col3, sum_col4, sum_col5 = st.columns(5)
+sum_col1, sum_col2, sum_col3, sum_col4 = st.columns(4)
 
 with sum_col1:
     st.metric("Transactions", total_transactions)
@@ -343,8 +342,6 @@ with sum_col3:
 with sum_col4:
     st.metric("Mapping %", f"{mapping_percentage:.2f}%")
 
-with sum_col5:
-    st.metric("Net Movement", format_money(total_signed_amount))
 
 
 tab_pnl, tab_tb, tab_audit, tab_unmatched, tab_low, tab_rules, tab_accounts = st.tabs(
