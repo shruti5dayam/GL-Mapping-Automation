@@ -10,6 +10,8 @@ import pandas as pd
 import streamlit as st
 
 from pipeline import run_pipeline
+from pnl_generator import generate_pnl
+
 
 
 st.set_page_config(
@@ -24,6 +26,7 @@ st.caption("Upload files → Run GL Mapping → Review outputs")
 
 RESULTS_KEY = "gl_mapping_v2_results"
 
+BANK_PREVIEW_KEY = "gl_mapping_v2_bank_preview"
 
 def format_money(value: float) -> str:
     try:
@@ -204,6 +207,106 @@ def get_result_df(results: dict, key: str) -> pd.DataFrame:
     value = results.get(key, pd.DataFrame())
     return value if isinstance(value, pd.DataFrame) else pd.DataFrame()
 
+def add_dashboard_filter_columns(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    if df.empty:
+        return df
+
+    if "Store" in df.columns:
+        store_text = df["Store"].fillna("").astype(str)
+
+        # Expected format: Dunkin:DD13
+        store_parts = store_text.str.split(":", n=1, expand=True)
+
+        df["Brand"] = store_parts[0].replace("", "Unknown")
+
+        if store_parts.shape[1] > 1:
+            df["Store ID"] = store_parts[1].str.upper().str.strip()
+        else:
+            df["Store ID"] = ""
+    else:
+        df["Brand"] = "Unknown"
+        df["Store ID"] = ""
+
+    if "Date" in df.columns:
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["Period"] = df["Date"].dt.to_period("M").astype(str)
+        df["Period"] = df["Period"].replace("NaT", "")
+        df["Quarter"] = df["Date"].dt.to_period("Q").astype(str)
+        df["Quarter"] = df["Quarter"].replace("NaT", "")
+        
+    else:
+        df["Period"] = ""
+        df["Quarter"] = ""
+
+    return df
+
+def apply_dashboard_filters(
+    df: pd.DataFrame,
+    selected_brand: str,
+    selected_store: str,
+    report_period_type: str,
+    selected_month: str,
+    selected_quarter: str,
+) -> pd.DataFrame:
+    df = df.copy()
+
+    if df.empty:
+        return df
+
+    if selected_brand != "All":
+        df = df[df["Brand"] == selected_brand]
+
+    if selected_store != "All":
+        df = df[df["Store ID"] == selected_store]
+
+    if report_period_type == "Month" and selected_month != "All":
+        df = df[df["Period"] == selected_month]
+
+    if report_period_type == "Quarter" and selected_quarter != "All":
+        df = df[df["Quarter"] == selected_quarter]
+
+    return df
+
+def build_trial_balance_from_transactions(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame()
+
+    required_columns = [
+        "Account Number",
+        "Account Name",
+        "Account Type",
+        "Detail Type",
+        "Amount",
+    ]
+
+    missing = [col for col in required_columns if col not in df.columns]
+
+    if missing:
+        st.error(f"Missing columns for Trial Balance: {missing}")
+        return pd.DataFrame()
+
+    working_df = df.copy()
+    working_df["Amount"] = pd.to_numeric(
+        working_df["Amount"],
+        errors="coerce",
+    ).fillna(0.0)
+
+    return (
+        working_df.groupby(
+            [
+                "Account Number",
+                "Account Name",
+                "Account Type",
+                "Detail Type",
+            ],
+            as_index=False,
+        )["Amount"]
+        .sum()
+        .sort_values(["Account Type", "Account Name"])
+        .reset_index(drop=True)
+    )
 
 st.sidebar.header("Upload Input Files")
 
@@ -222,6 +325,63 @@ uploaded_coa_file = st.sidebar.file_uploader(
     "Chart of Accounts (.csv)",
     type=["csv"],
 )
+
+bank_preview_df = pd.DataFrame()
+
+if uploaded_bank_files:
+    try:
+        bank_preview_df = read_uploaded_bank_files(uploaded_bank_files)
+        bank_preview_df = add_dashboard_filter_columns(bank_preview_df)
+        st.session_state[BANK_PREVIEW_KEY] = bank_preview_df
+
+        st.sidebar.header("Report Filters")
+
+        brand_options = ["All"] + sorted(
+            bank_preview_df["Brand"].dropna().astype(str).unique().tolist()
+        )
+
+        store_options = ["All"] + sorted(
+            bank_preview_df["Store ID"].dropna().astype(str).unique().tolist()
+        )
+
+        month_options = ["All"] + sorted(
+            bank_preview_df["Period"].dropna().astype(str).unique().tolist()
+        )
+
+        quarter_options = ["All"] + sorted(
+            bank_preview_df["Quarter"].dropna().astype(str).unique().tolist()
+        )
+
+        selected_brand = st.sidebar.selectbox("Brand", brand_options)
+        selected_store = st.sidebar.selectbox("Store ID", store_options)
+
+        report_period_type = st.sidebar.selectbox(
+             "Report Period Type",
+            ["All", "Month", "Quarter"],
+        )
+
+        selected_month = "All"
+        selected_quarter = "All"
+
+        if report_period_type == "Month":
+            selected_month = st.sidebar.selectbox("Month", month_options)
+
+        elif report_period_type == "Quarter":
+            selected_quarter = st.sidebar.selectbox("Quarter", quarter_options)
+
+    except Exception as error:
+        st.sidebar.error(f"Could not preview bank files: {error}")
+        selected_brand = "All"
+        selected_store = "All"
+        report_period_type = "All"
+        selected_month = "All"
+        selected_quarter = "All"
+else:
+    selected_brand = "All"
+    selected_store = "All"
+    report_period_type = "All"
+    selected_month = "All"
+    selected_quarter = "All"
 
 run_button = st.sidebar.button("🚀 Run GL Mapping", width="stretch")
 clear_button = st.sidebar.button("🧹 Clear Results", width="stretch")
@@ -247,6 +407,17 @@ if run_button:
     try:
         with st.spinner("Reading uploaded files..."):
             bank_df = read_uploaded_bank_files(uploaded_bank_files)
+            bank_df = add_dashboard_filter_columns(bank_df)
+
+            bank_df = apply_dashboard_filters(
+                bank_df,
+                selected_brand,
+                selected_store,
+                report_period_type,
+                selected_month,
+                selected_quarter,
+)
+
             rules_df = read_rules_file(uploaded_rules_file)
             coa_df = read_coa_file(uploaded_coa_file)
 
@@ -276,6 +447,7 @@ if not results:
 
 
 bank_df = get_result_df(results, "bank_df")
+mapping_audit_df = get_result_df(results, "mapping_audit_df")
 trial_balance_df = get_result_df(results, "trial_balance_df")
 pnl_df = get_result_df(results, "pnl_df")
 unmatched_df = get_result_df(results, "unmatched_df")
@@ -309,10 +481,7 @@ with bal_col3:
 
 st.subheader("Pipeline Summary")
 
-total_transactions = validation_report.get(
-    "total_transactions",
-    0,
-)
+total_transactions = validation_report.get("total_transactions", 0)
 unmatched_count = validation_report.get("unmatched_rules", len(unmatched_df))
 
 
